@@ -128,7 +128,7 @@ func handlePDU() func(pdu.PDU, bool) {
 	return func(p pdu.PDU, _ bool) {
 		switch pd := p.(type) {
 		case *pdu.SubmitSMResp:
-			log.Println("SubmitSMResp:", pd.SequenceNumber, pd.MessageID)
+			log.Println("SubmitSMResp:", pd.SequenceNumber, pd.MessageID, pd.IsOk())
 
 		case *pdu.GenericNack:
 			log.Println("GenericNack Received")
@@ -140,13 +140,17 @@ func handlePDU() func(pdu.PDU, bool) {
 			log.Printf("DataSM:%+v\n", pd)
 
 		case *pdu.DeliverSM:
-			log.Printf("DeliverSM:%+v\n", pd)
-			log.Println(pd.Message.GetMessage())
+			log.Println("DeliverSM:", pd.SequenceNumber, pd.IsOk())
 			// region concatenated sms (sample code)
 			message, err := pd.Message.GetMessage()
+			log.Println(message, err)
 			if err != nil {
 				log.Fatal(err)
 			}
+
+			// found means there's UDH and the message is concatenated.
+			// check the #totalParts and see if all the DeliverSM parts are received
+			// if not, then keep concatenating; otherwise, concatenating is done and reset
 			totalParts, sequence, reference, found := pd.Message.UDH().GetConcatInfo()
 			if found {
 				if _, ok := concatenated[reference]; !ok {
@@ -155,7 +159,7 @@ func handlePDU() func(pdu.PDU, bool) {
 				concatenated[reference][sequence-1] = message
 			}
 			if !found {
-				log.Println(message)
+				//log.Println(message)
 			} else if parts, ok := concatenated[reference]; ok && isConcatenatedDone(parts, totalParts) {
 				log.Println(strings.Join(parts, ""))
 				delete(concatenated, reference)
